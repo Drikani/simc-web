@@ -2,14 +2,12 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "8081:80"
+      - "8080:80"
     depends_on:
       - backend
 
   backend:
     build: ./backend
-    ports:
-      - "8080:8080"
     volumes:
       - simc-jobs:/jobs
     depends_on:

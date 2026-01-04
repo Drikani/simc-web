@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"log"
 	"os"
@@ -21,7 +22,6 @@ func main() {
 	})
 
 	for {
-		// Blocking pop: wartet bis ein Job da ist
 		res, err := rdb.BLPop(ctx, 0*time.Second, "job_queue").Result()
 		if err != nil {
 			log.Println("Redis error:", err)
@@ -41,8 +41,11 @@ func main() {
 		rdb.Set(ctx, "job:"+jobID+":progress", "running", 0)
 
 		cmd := exec.CommandContext(ctx, "/app/SimulationCraft/simc", profileFile)
+
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()
+
+		var fullOutput bytes.Buffer
 
 		if err := cmd.Start(); err != nil {
 			log.Println("Failed to start SimC:", err)
@@ -50,19 +53,33 @@ func main() {
 			continue
 		}
 
-		pushToRedis := func(scanner *bufio.Scanner) {
+		push := func(scanner *bufio.Scanner) {
 			for scanner.Scan() {
 				line := scanner.Text()
+
+				// 🔴 Live-Stream
 				rdb.RPush(ctx, "job:"+jobID+":stream", line)
+
+				// 🟢 Finaler Output
+				fullOutput.WriteString(line + "\n")
 			}
 		}
-		go pushToRedis(bufio.NewScanner(stdout))
-		go pushToRedis(bufio.NewScanner(stderr))
+
+		go push(bufio.NewScanner(stdout))
+		go push(bufio.NewScanner(stderr))
 
 		if err := cmd.Wait(); err != nil {
 			log.Println("SimC finished with error:", err)
 			rdb.Set(ctx, "job:"+jobID+":progress", "failed", 0)
 		} else {
+			log.Println("SimC finished successfully:", jobID)
+
+			// ✅ FINALEN OUTPUT SPEICHERN
+			rdb.Set(ctx, "job:"+jobID+":result", fullOutput.String(), 0)
+
+			// Cleanup
+			os.Remove(profileFile)
+
 			rdb.Set(ctx, "job:"+jobID+":progress", "done", 0)
 		}
 	}

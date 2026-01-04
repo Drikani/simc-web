@@ -1,58 +1,132 @@
-const form = document.getElementById("job-form");
-const textarea = document.getElementById("job-input");
-const outputContainer = document.getElementById("job-output");
-const jobList = document.getElementById("job-list");
+const startBtn = document.getElementById("startBtn");
+const profileInput = document.getElementById("profileInput");
+const statusEl = document.getElementById("status");
+const loaderEl = document.getElementById("loader");
+const liveOutputEl = document.getElementById("liveOutput");
+const resultOutputEl = document.getElementById("resultOutput");
 
-let jobs = [];
+let eventSource = null;
 
-form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile: textarea.value })
-    });
-    const data = await res.json();
-    const jobId = data.job_id;
-
-    jobs.push({ id: jobId, status: "queued" });
-    renderJobs();
-
-    outputContainer.textContent = `Job ${jobId} started...\n`;
-
-    const evtSource = new EventSource(`/api/jobs/${jobId}/stream`);
-    evtSource.onmessage = function(e) {
-        outputContainer.textContent += e.data + "\n";
-    };
-    evtSource.onerror = function() {
-        outputContainer.textContent += "\n--- Stream closed ---\n";
-        evtSource.close();
-    };
-
-    // Status Polling
-    const pollStatus = setInterval(async () => {
-        const statusRes = await fetch(`/api/jobs/${jobId}/progress`);
-        const statusData = await statusRes.json();
-        updateJobStatus(jobId, statusData.progress);
-        renderJobs();
-        if (["done", "failed"].includes(statusData.progress)) {
-            clearInterval(pollStatus);
-        }
-    }, 200);
-});
-
-function updateJobStatus(jobId, status) {
-    const job = jobs.find(j => j.id === jobId);
-    if (job) job.status = status;
+function setStatus(text) {
+  statusEl.textContent = text;
 }
 
-function renderJobs() {
-    jobList.innerHTML = "";
-    jobs.forEach(job => {
-        const div = document.createElement("div");
-        div.className = `job ${job.status}`;
-        div.textContent = `Job ${job.id} - ${job.status}`;
-        jobList.appendChild(div);
-    });
+function showLoader(show) {
+  loaderEl.style.display = show ? "block" : "none";
 }
+
+function resetUI() {
+  liveOutputEl.textContent = "";
+  resultOutputEl.textContent = "";
+  setStatus("");
+  showLoader(false);
+
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+}
+
+async function startJob() {
+  resetUI();
+
+  const profile = profileInput.value.trim();
+  if (!profile) {
+    alert("Bitte SimC Profil eingeben");
+    return;
+  }
+
+  setStatus("Job wird erstellt …");
+  showLoader(true);
+
+  const res = await fetch("/api/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile })
+  });
+
+  if (!res.ok) {
+    setStatus("Fehler beim Erstellen des Jobs");
+    showLoader(false);
+    return;
+  }
+
+  const { job_id } = await res.json();
+  setStatus("Simulation läuft …");
+
+  startStream(job_id);
+}
+
+function startStream(jobId) {
+  eventSource = new EventSource(`/api/jobs/${jobId}/stream`);
+
+  eventSource.addEventListener("output", (event) => {
+    liveOutputEl.textContent += event.data + "\n";
+    liveOutputEl.scrollTop = liveOutputEl.scrollHeight;
+  });
+
+  eventSource.addEventListener("status", async (event) => {
+    if (event.data === "done") {
+      setStatus("Simulation abgeschlossen ✅");
+      showLoader(false);
+      eventSource.close();
+      await fetchAndRenderResult(jobId);
+    }
+
+    if (event.data === "failed") {
+      setStatus("Simulation fehlgeschlagen ❌");
+      showLoader(false);
+      eventSource.close();
+    }
+  });
+
+  eventSource.onerror = () => {
+    setStatus("Stream unterbrochen");
+    showLoader(false);
+    eventSource.close();
+  };
+}
+
+async function fetchAndRenderResult(jobId) {
+  setStatus("Ergebnis wird verarbeitet …");
+
+  const res = await fetch(`/api/jobs/${jobId}/result`);
+  if (!res.ok) {
+    setStatus("Kein Ergebnis gefunden");
+    return;
+  }
+
+  const { output } = await res.json();
+
+  // Fallback: roher Output
+  resultOutputEl.textContent = output;
+
+  // Parser aufrufen
+  const parsedRes = await fetch("/api/parse-simc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ output })
+  });
+
+  if (!parsedRes.ok) {
+    console.warn("Parser fehlgeschlagen");
+    return;
+  }
+
+  const parsed = await parsedRes.json();
+  renderParsedResult(parsed);
+}
+
+function renderParsedResult(data) {
+  resultOutputEl.innerHTML = `
+    <h2>Simulation Ergebnis</h2>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      <div><strong>Spieler</strong><br>${data.summary.player || "-"}</div>
+      <div><strong>Spec</strong><br>${data.summary.spec || "-"}</div>
+      <div><strong>DPS</strong><br>${Math.round(data.summary.dps || 0).toLocaleString()}</div>
+    </div>
+  `;
+}
+
+startBtn.addEventListener("click", startJob);

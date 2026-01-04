@@ -1,32 +1,79 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>SimC Web Interface</title>
+  <meta charset="UTF-8" />
+  <title>SimC Web</title>
+
   <style>
-    body { font-family: sans-serif; margin: 2rem; }
-    textarea { width: 100%; }
-    #job-list { margin-top: 1rem; }
-    .job { padding: 0.5rem; border: 1px solid #ccc; margin-bottom: 0.5rem; }
-    .queued { background-color: #fffae6; }
-    .running { background-color: #e6f0ff; }
-    .done { background-color: #e6ffe6; }
-    .failed { background-color: #ffe6e6; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 1rem;
+    }
+
+    #container {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 {
+      margin-bottom: .5rem;
+    }
+
+    #profileInput {
+      width: 100%;
+      height: 140px;
+      font-family: monospace;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 8px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #loader {
+      display: none;
+      margin-top: 10px;
+      font-weight: bold;
+      color: #007bff;
+    }
+
+    pre {
+      background: #272822;
+      color: #f8f8f2;
+      padding: 8px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
+
 <body>
-<h1>SimC Web Interface</h1>
+  <div id="container">
+    <h1>SimC Web UI</h1>
 
-<form id="job-form">
-  <textarea id="job-input" rows="10" placeholder="SimC profile here..."></textarea><br>
-  <button type="submit">Start Job</button>
-</form>
+    <textarea
+      id="profileInput"
+      placeholder="Paste SimC profile here ..."
+    ></textarea>
 
-<h2>Job Output</h2>
-<pre id="job-output"></pre>
+    <br />
 
-<h2>Jobs</h2>
-<div id="job-list"></div>
+    <!-- WICHTIG: type="button" + id -->
+    <button id="startBtn" type="button">
+      Run Simulation
+    </button>
 
-<script src="script.js"></script>
+    <div id="loader">Running simulation… please wait</div>
+    <div id="status"></div>
+
+    <h2>Job Output</h2>
+    <pre id="liveOutput">No output yet</pre>
+    <pre id="resultOutput"></pre>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
