@@ -1,33 +1,69 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"simc-worker/simc"
 )
 
 func main() {
-	rdb := redis.NewClient(&redis.Options{Addr: "redis:6379"})
 	ctx := context.Background()
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "redis:6379",
+		DB:   0,
+	})
+
 	for {
-		id, err := rdb.BRPop(ctx, 0, "queue:jobs").Result()
+		// Blocking pop: wartet bis ein Job da ist
+		res, err := rdb.BLPop(ctx, 0*time.Second, "job_queue").Result()
 		if err != nil {
-			log.Println(err)
+			log.Println("Redis error:", err)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		jobID := id[1]
-		profile := rdb.Get(ctx, "job:"+jobID+":profile").Val()
+		jobID := res[1]
+		log.Println("Processing job:", jobID)
 
-		rdb.HSet(ctx, "job:"+jobID, "status", "running")
+		profileFile := filepath.Join("/jobs", jobID+".simc")
+		if _, err := os.Stat(profileFile); os.IsNotExist(err) {
+			log.Println("Profile file does not exist:", profileFile)
+			continue
+		}
 
-		simc.Run(ctx, rdb, jobID, profile)
+		rdb.Set(ctx, "job:"+jobID+":progress", "running", 0)
 
-		rdb.HSet(ctx, "job:"+jobID, "status", "done")
-		time.Sleep(100 * time.Millisecond)
+		cmd := exec.CommandContext(ctx, "/app/SimulationCraft/simc", profileFile)
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
+
+		if err := cmd.Start(); err != nil {
+			log.Println("Failed to start SimC:", err)
+			rdb.Set(ctx, "job:"+jobID+":progress", "failed", 0)
+			continue
+		}
+
+		pushToRedis := func(scanner *bufio.Scanner) {
+			for scanner.Scan() {
+				line := scanner.Text()
+				rdb.RPush(ctx, "job:"+jobID+":stream", line)
+			}
+		}
+		go pushToRedis(bufio.NewScanner(stdout))
+		go pushToRedis(bufio.NewScanner(stderr))
+
+		if err := cmd.Wait(); err != nil {
+			log.Println("SimC finished with error:", err)
+			rdb.Set(ctx, "job:"+jobID+":progress", "failed", 0)
+		} else {
+			rdb.Set(ctx, "job:"+jobID+":progress", "done", 0)
+		}
 	}
 }

@@ -1,12 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>SimC Web</title>
+  <title>SimC Web Interface</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    textarea { width: 100%; }
+    #job-list { margin-top: 1rem; }
+    .job { padding: 0.5rem; border: 1px solid #ccc; margin-bottom: 0.5rem; }
+    .queued { background-color: #fffae6; }
+    .running { background-color: #e6f0ff; }
+    .done { background-color: #e6ffe6; }
+    .failed { background-color: #ffe6e6; }
+  </style>
 </head>
 <body>
-    <textarea id="profile"></textarea>
-    <button onclick="run()">Run</button>
-    <pre id="out"></pre>
-    <script src="app.js"></script>
+<h1>SimC Web Interface</h1>
+
+<form id="job-form">
+  <textarea id="job-input" rows="10" placeholder="SimC profile here..."></textarea><br>
+  <button type="submit">Start Job</button>
+</form>
+
+<h2>Job Output</h2>
+<pre id="job-output"></pre>
+
+<h2>Jobs</h2>
+<div id="job-list"></div>
+
+<script src="script.js"></script>
 </body>
 </html>
