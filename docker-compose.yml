@@ -1,34 +1,29 @@
 services:
-  redis:
-    image: redis:7
-
-  simc:
-    build: ./simc
-    container_name: simc
-    volumes:
-      - simc_data:/data
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: 4G
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
 
   worker:
     build: ./worker
+    deploy:
+      replicas: 3
     depends_on:
-      - simc
       - redis
-    volumes:
-      - simc_data:/data
 
-  web:
-    build: ./web
-    ports:
-      - "5000:5000"
-    depends_on:
-      - redis
+  frontend:
+    image: nginx:alpine
     volumes:
-      - simc_data:/data
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "8081:80"
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
 
 volumes:
-  simc_data:
+  redis-data:
