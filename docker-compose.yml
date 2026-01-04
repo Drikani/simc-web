@@ -1,0 +1,34 @@
+services:
+  redis:
+    image: redis:7
+
+  simc:
+    build: ./simc
+    container_name: simc
+    volumes:
+      - simc_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+
+  worker:
+    build: ./worker
+    depends_on:
+      - simc
+      - redis
+    volumes:
+      - simc_data:/data
+
+  web:
+    build: ./web
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+    volumes:
+      - simc_data:/data
+
+volumes:
+  simc_data:

@@ -1,0 +1,21 @@
+<h1>SimulationCraft Web</h1>
+
+<form method="post">
+<textarea name="simc" rows="20" cols="100">
+warrior="Demo"
+level=70
+spec=arms
+</textarea><br>
+<button>Simulieren</button>
+</form>
+
+{% if job_id %}
+<p>Simulation läuft…</p>
+<script>
+const id = "{{ job_id }}";
+setInterval(async () => {
+  const r = await fetch("/status/" + id).then(r => r.json());
+  if (r.done) location.href = "/result/" + id;
+}, 2000);
+</script>
+{% endif %}
