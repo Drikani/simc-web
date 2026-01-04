@@ -1,0 +1,36 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    volumes:
+      - simc-jobs:/jobs
+    depends_on:
+      - redis
+  
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
+
+  worker:
+    build: ./worker
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1g
+    volumes:
+      - simc-jobs:/jobs
+    depends_on:
+      - redis
+
+volumes:
+  redis-data:
+  simc-jobs:
